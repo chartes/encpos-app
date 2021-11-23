@@ -74,7 +74,25 @@ def register_search_endpoint(bp, api_version="1.0", compose_result_func: Callabl
                                     "default_operator": "AND"
                                 }
                             }
-                        ]
+                        ],
+                        "should": [
+                            {
+                            "bool": {
+                                "must_not": [
+                                        {
+                                            "exists": {
+                                                "field": "metadata.topic_notBefore",
+                                            }
+                                        },
+                                        {
+                                            "exists": {
+                                                "field": "metadata.topic_notAfter"
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ],
                     },
                 },
                 "highlight": {
@@ -95,7 +113,12 @@ def register_search_endpoint(bp, api_version="1.0", compose_result_func: Callabl
             }
 
             if ranges:
-                body["query"]["bool"]['must'].extend([{"range": r} for r in ranges])
+                for r in ranges:
+                    key = [k for k in r.keys()][0]
+                    if key.startswith("metadata.topic_"):
+                        body["query"]["bool"]["should"].append({"range": r})
+                    else:
+                        body["query"]["bool"]["must"].append({"range": r})
 
             if groupby_field is not None:
                 body["aggregations"] = {
