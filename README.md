@@ -43,20 +43,20 @@ docker restart es-encpos
 
 ### Initial indexing:
 ```bash
-ES_PASSWORD={ELASTIC_PASSWORD} python3 manage.py (--config=<dev/prod>) update-conf --host=http://localhost:5004
-ES_PASSWORD={ELASTIC_PASSWORD} python3 manage.py (--config=<dev/prod>) index (--years=YYYY-YYYY) --host=http://localhost:5004
+ES_PASSWORD={ELASTIC_PASSWORD} python3 manage.py update-conf
+ES_PASSWORD={ELASTIC_PASSWORD} python3 manage.py index (--years=YYYY-YYYY)
 ```
 
 ### Update the indexes' configuration:
 ```bash
-ES_PASSWORD={ELASTIC_PASSWORD} python3 manage.py (--config=<dev/prod>) update-conf --rebuild=true --host=http://localhost:5004
+ES_PASSWORD={ELASTIC_PASSWORD} python3 manage.py update-conf --rebuild
 ```
 The above command updates the indexes according to the ES [configuration](./elasticsearch/).  
 
 
 ### Index or reindex (without configuration changes):
 ```bash
-ES_PASSWORD={ELASTIC_PASSWORD} python3 manage.py (--config=<dev/prod>) index (--years=YYYY-YYYY) --host=http://localhost:5004
+ES_PASSWORD={ELASTIC_PASSWORD} python3 manage.py index (--years=YYYY-YYYY)
 ```
 
 ### Check created indexes:
