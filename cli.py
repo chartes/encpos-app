@@ -163,7 +163,7 @@ def make_cli(env='dev'):
                 _ids = [d for d in metadata.keys() if str(year) in d and "_PREV" not in d and "_NEXT" not in d]
 
                 for encpos_id in _ids:
-                    response = requests.get(f'{_DTS_URL}/document?id={encpos_id}')
+                    response = requests.get(f'{_DTS_URL}/document?resource={encpos_id}')
                     print(encpos_id, response.status_code)
 
                     content = extract_body(response.text)
