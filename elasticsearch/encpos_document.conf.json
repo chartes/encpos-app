@@ -6,10 +6,14 @@
         "analyzer": "folding",
         "term_vector": "with_positions_offsets"
       },
+      "metadata_all": {
+        "type": "text"
+      },
       "metadata": {
         "properties": {
           "author_firstname": {
             "type": "text",
+            "copy_to": "metadata_all",
             "fields": {
               "keyword": {
                 "type": "keyword",
@@ -19,10 +23,34 @@
           },
           "author_name": {
             "type": "text",
+            "copy_to": "metadata_all",
             "fields": {
               "keyword": {
                 "type": "keyword",
                 "normalizer": "keyword"
+              }
+            }
+          },
+          "promotion_year": {
+            "type": "short",
+            "copy_to": "metadata_all"
+          },
+          "topic_notAfter": {
+            "type": "short",
+            "copy_to": "metadata_all"
+          },
+          "topic_notBefore": {
+            "type": "short",
+            "copy_to": "metadata_all"
+          },
+          "title_rich": {
+            "type": "text",
+            "copy_to": "metadata_all",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "normalizer": "keyword",
+                "ignore_above": 256
               }
             }
           }
