@@ -4,6 +4,10 @@
   },
   "analysis": {
     "filter": {
+      "my_stop_french":{
+        "type": "stop",
+        "stopwords": "_french_"
+      },
       "french_elision": {
         "type": "elision",
         "articles_case": true,
@@ -29,24 +33,23 @@
         "type": "html_strip"
       }
     },
+    "normalizer":{
+      "keyword": {
+        "filter": [
+          "icu_folding"
+        ]
+      }
+    },
     "analyzer": {
       "folding": {
         "tokenizer": "standard",
-        "stopwords": "_french_",
         "filter": [
           "french_elision",
-          "icu_folding"
+          "icu_folding",
+          "my_stop_french"
         ],
         "char_filter": [
           "html_stripper"
-        ]
-      },
-      "keyword": {
-        "tokenizer": "keyword",
-        "stopwords": "_french_",
-        "filter": [
-          "french_elision",
-          "icu_folding"
         ]
       }
     }
