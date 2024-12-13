@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 api_bp = Blueprint('api_bp', __name__)
 
 
-def create_app(config_name="dev"):
+def create_app(config_name: str):
     """ Create the application """
     app = Flask(__name__)
     if not isinstance(config_name, str):

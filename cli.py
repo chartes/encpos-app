@@ -1,3 +1,5 @@
+from csv import DictReader
+import io
 import json
 import pprint
 import re
@@ -29,11 +31,12 @@ def load_elastic_conf(index_name, rebuild=False):
     res = None
     try:
         if rebuild:
+            print(f"Deleting {index_name} index.")
             res = requests.delete(url)
-        with open(f'{app.config["ELASTICSEARCH_CONFIG_DIR"]}/_global.conf.json', 'r') as _global:
+        with open('elasticsearch/_global.conf.json', 'r') as _global:
             global_settings = json.load(_global)
 
-            with open(f'{app.config["ELASTICSEARCH_CONFIG_DIR"]}/{index_name}.conf.json', 'r') as f:
+            with open(f'elasticsearch/{index_name}.conf.json', 'r') as f:
                 payload = json.load(f)
                 payload["settings"] = global_settings
                 print("UPDATE INDEX CONFIGURATION:", url)
@@ -48,16 +51,17 @@ def load_elastic_conf(index_name, rebuild=False):
         raise e
 
 
-def make_cli(env='dev'):
+def make_cli():
     """ Creates a Command Line Interface for everydays tasks
 
     :return: Click groum
     """
 
     @click.group()
-    def cli():
+    @click.option('--config', default="staging", type=click.Choice(["local", "staging", "prod"]), help="select appropriate .env file to use", show_default=True)
+    def cli(config):
         global app
-        app = create_app(env)
+        app = create_app(config)
         app.all_indexes = f"{app.config['DOCUMENT_INDEX']},{app.config['COLLECTION_INDEX']}"
 
     @click.command("search")
@@ -85,10 +89,7 @@ def make_cli(env='dev'):
         else:
             body = query
 
-        config = {
-            "index": indexes if indexes else app.all_indexes,
-            "body": body
-        }
+        config = {"index": indexes if indexes else app.all_indexes, "body": body}
 
         result = app.elasticsearch.search(**config)
         print("\n", "=" * 12, " RESULT ", "=" * 12)
@@ -116,6 +117,7 @@ def make_cli(env='dev'):
             url = '/'.join([app.config['ELASTICSEARCH_URL'], name])
             res = None
             try:
+                print(f"Deleting {name} index.")
                 res = requests.delete(url)
             except Exception as e:
                 print(res.text, str(e), flush=True, end=" ")
@@ -127,55 +129,65 @@ def make_cli(env='dev'):
         """
         Rebuild the elasticsearch indexes
         """
+        _index_name = app.config["DOCUMENT_INDEX"]
+        if not app.elasticsearch.indices.exists(index=_index_name):
+            print(f"Index {_index_name} not found.")
+            load_elastic_conf(_index_name, rebuild=False)
 
         # BUILD THE METADATA DICT FROM THE GITHUB TSV FILE
-        response = requests.get(app.config['METADATA_FILE_URL'])
+        response = requests.get(app.config["METADATA_FILE_URL"])
         metadata = {}
-        lines = response.text.splitlines()
-        header = lines.pop(0).split('\t')
-        for line in lines:
-            _d = {}
-            # replace empty strings with null values
-            _values = [v if v != "" else None for v in line.split('\t')]
-            for i, k in enumerate(header):
-                # filter indexable columns
-                if k in app.config['METADATA_FILE_INDEXABLE_COLUMNS']:
-                    # brutally try to cast values as integer
-                    try:
-                        _d[k] = int(_values[i])
-                    except (TypeError, ValueError):
-                        _d[k] = _values[i]
+        reader = DictReader(io.StringIO(response.text), delimiter="\t")
+        for row in reader:
+            try:
+                metadata[row["id"]] = {
+                    "author_name": row["author_name"],
+                    "author_firstname": row["author_firstname"],
+                    "title_rich": row["title_rich"],
+                    "promotion_year": int(row["promotion_year"]) if row["promotion_year"] else None,
+                    "topic_notBefore": int(row["topic_notBefore"]) if row["topic_notBefore"] else None,
+                    "topic_notAfter": int(row["topic_notAfter"]) if row["topic_notAfter"] else None,
+                    "author_gender": int(row["author_gender"]) if row["author_gender"] else None,
+                        # 1/2, verify that there is no other value
+                    "author_is_enc_teacher": 1 if row["author_is_enc_teacher"]=="1" else None, 
+                }
+            except Exception as exc:
+                print(f"ERROR while indexing {row['id']}, {exc}")
 
-            metadata[_d['id']] = _d
-            # remove id from nested metadata object
-            metadata[_d['id']].pop("id")
-
-        _DTS_URL = app.config['DTS_URL']
+        _DTS_URL = app.config["DTS_URL"]
 
         # INDEXATION DES DOCUMENTS
+        all_docs = []
         try:
-            _index_name = app.config['DOCUMENT_INDEX']
             if years == "all":
-                years = app.config['ALL_YEARS']
-            start_year, end_year = (int(y) for y in years.split('-'))
+                years = app.config["ALL_YEARS"]
+            start_year, end_year = (int(y) for y in years.split("-"))
+            print("Fetching documents from DTS")
             for year in range(start_year, end_year + 1):
 
-                _ids = [d for d in metadata.keys() if str(year) in d and "_PREV" not in d and "_NEXT" not in d]
+                _ids = [
+                    d
+                    for d in metadata.keys()
+                    if str(year) in d and "_PREV" not in d and "_NEXT" not in d
+                ]
 
                 for encpos_id in _ids:
-                    response = requests.get(f'{_DTS_URL}/document?id={encpos_id}')
+                    response = requests.get(f"{_DTS_URL}/document?id={encpos_id}")
                     print(encpos_id, response.status_code)
 
                     content = extract_body(response.text)
                     content = remove_html_tags(content)
+                    all_docs.append("\n".join([
+                        json.dumps(
+                            {"index": {"_index": _index_name, "_id": encpos_id}}
+                        ),
+                        json.dumps(
+                            {"content": content, "metadata": metadata[encpos_id]}
+                        )
+                    ]))
 
-                    app.elasticsearch.index(
-                        index=_index_name,
-                        id=encpos_id,
-                        body={
-                            "content": content,
-                            "metadata": metadata[encpos_id]
-                        })
+            print("Indexig documents in elasticsearch")
+            app.elasticsearch.bulk(body=all_docs, request_timeout=60*10)
 
         except Exception as e:
             print('Indexation error: ', str(e))
@@ -192,4 +204,3 @@ def make_cli(env='dev'):
     cli.add_command(index)
     cli.add_command(search)
     return cli
-

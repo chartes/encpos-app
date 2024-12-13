@@ -14,10 +14,9 @@ def parse_var_env(var_name):
 
 class Config(object):
     ENV = 'production'
-    DEBUG = False
+    DEBUG = parse_var_env('DEBUG')
 
     ELASTICSEARCH_URL = parse_var_env('ELASTICSEARCH_URL')
-    ELASTICSEARCH_CONFIG_DIR = parse_var_env('ELASTICSEARCH_CONFIG_DIR')
     DOCUMENT_INDEX = parse_var_env('DOCUMENT_INDEX')
     COLLECTION_INDEX = parse_var_env('COLLECTION_INDEX')
 
@@ -37,12 +36,16 @@ class Config(object):
         pass
 
 
-class DevelopmentConfig(Config):
+class LocalConfig(Config):
     ENV = 'development'
-    DEBUG = True
+
+
+class StagingConfig(Config):
+    ENV = 'development'
 
 
 config = {
-    "dev": DevelopmentConfig,
+    "local": LocalConfig,
+    "staging": StagingConfig,
     "prod": Config,
 }
