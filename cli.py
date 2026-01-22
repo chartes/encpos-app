@@ -7,6 +7,11 @@ import re
 import click
 import requests
 
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from requests.exceptions import SSLError, RequestException
+import time
+
 from api import create_app
 
 clean_tags = re.compile('<.*?>')
@@ -149,7 +154,7 @@ def make_cli():
                     "topic_notAfter": int(row["topic_notAfter"]) if row["topic_notAfter"] else None,
                     "author_gender": int(row["author_gender"]) if row["author_gender"] else None,
                         # 1/2, verify that there is no other value
-                    "author_is_enc_teacher": 1 if row["author_is_enc_teacher"]=="1" else None, 
+                    "author_is_enc_teacher": 1 if row["author_is_enc_teacher"]=="1" else None,
                 }
             except Exception as exc:
                 print(f"ERROR while indexing {row['id']}, {exc}")
@@ -157,6 +162,23 @@ def make_cli():
         _DTS_URL = app.config["DTS_URL"]
 
         # INDEXATION DES DOCUMENTS
+        # --- Session HTTP pour le DTS ---
+        session = requests.Session()
+
+        session.headers.update({
+            "User-Agent": "ENCPOS-Indexer/1.0 (+https://github.com/encpos)"
+        })
+
+        retry = Retry(
+            total=5,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"]
+        )
+
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount("https://", adapter)
+
         all_docs = []
         try:
             if years == "all":
@@ -172,7 +194,19 @@ def make_cli():
                 ]
 
                 for encpos_id in _ids:
-                    response = requests.get(f'{_DTS_URL}/document?resource={encpos_id}')
+                    try:
+                        response = session.get(
+                            f"{_DTS_URL}/document",
+                            params={"resource": encpos_id},
+                            timeout=30
+                        )
+                        response.raise_for_status()
+                    except SSLError as e:
+                        print(f"SSL error for {encpos_id}, skipping")
+                        continue
+                    except RequestException as e:
+                        print(f"HTTP error for {encpos_id}: {e}")
+                        continue
                     print(encpos_id, response.status_code)
 
                     content = extract_body(response.text)
