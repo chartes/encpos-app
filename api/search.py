@@ -103,8 +103,23 @@ def register_search_endpoint(bp, api_version="1.0", compose_result_func: Callabl
                     "options": {"return_offsets": False}
                 }
 
-            if ranges:
-                body["query"]["bool"]['must'].extend([{"range": r} for r in ranges])
+            for r in ranges:
+                for field, ops in r.items():
+                    body["query"]["bool"]["must"].append({
+                        "bool": {
+                            "should": [
+                                {"range": {field: ops}},
+                                {
+                                    "bool": {
+                                        "must_not": {
+                                            "exists": {"field": field}
+                                        }
+                                    }
+                                }
+                            ],
+                            "minimum_should_match": 1
+                        }
+                    })
 
             if groupby_field is not None:
                 body["aggregations"] = {
